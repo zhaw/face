@@ -30,44 +30,16 @@ modelDir = os.path.join(file_dir, '..', 'model')
 dlib_model_dir = os.path.join(modelDir, 'dlib')
 
 """Module for dlib-based alignment."""
-TEMPLATE = np.float32([
-    (0.0792396913815, 0.339223741112), (0.0829219487236, 0.456955367943),
-    (0.0967927109165, 0.575648016728), (0.122141515615, 0.691921601066),
-    (0.168687863544, 0.800341263616), (0.239789390707, 0.895732504778),
-    (0.325662452515, 0.977068762493), (0.422318282013, 1.04329000149),
-    (0.531777802068, 1.06080371126), (0.641296298053, 1.03981924107),
-    (0.738105872266, 0.972268833998), (0.824444363295, 0.889624082279),
-    (0.894792677532, 0.792494155836), (0.939395486253, 0.681546643421),
-    (0.96111933829, 0.562238253072), (0.970579841181, 0.441758925744),
-    (0.971193274221, 0.322118743967), (0.163846223133, 0.249151738053),
-    (0.21780354657, 0.204255863861), (0.291299351124, 0.192367318323),
-    (0.367460241458, 0.203582210627), (0.4392945113, 0.233135599851),
-    (0.586445962425, 0.228141644834), (0.660152671635, 0.195923841854),
-    (0.737466449096, 0.182360984545), (0.813236546239, 0.192828009114),
-    (0.8707571886, 0.235293377042), (0.51534533827, 0.31863546193),
-    (0.516221448289, 0.396200446263), (0.517118861835, 0.473797687758),
-    (0.51816430343, 0.553157797772), (0.433701156035, 0.604054457668),
-    (0.475501237769, 0.62076344024), (0.520712933176, 0.634268222208),
-    (0.565874114041, 0.618796581487), (0.607054002672, 0.60157671656),
-    (0.252418718401, 0.331052263829), (0.298663015648, 0.302646354002),
-    (0.355749724218, 0.303020650651), (0.403718978315, 0.33867711083),
-    (0.352507175597, 0.349987615384), (0.296791759886, 0.350478978225),
-    (0.631326076346, 0.334136672344), (0.679073381078, 0.29645404267),
-    (0.73597236153, 0.294721285802), (0.782865376271, 0.321305281656),
-    (0.740312274764, 0.341849376713), (0.68499850091, 0.343734332172),
-    (0.353167761422, 0.746189164237), (0.414587777921, 0.719053835073),
-    (0.477677654595, 0.706835892494), (0.522732900812, 0.717092275768),
-    (0.569832064287, 0.705414478982), (0.635195811927, 0.71565572516),
-    (0.69951672331, 0.739419187253), (0.639447159575, 0.805236879972),
-    (0.576410514055, 0.835436670169), (0.525398405766, 0.841706377792),
-    (0.47641545769, 0.837505914975), (0.41379548902, 0.810045601727),
-    (0.380084785646, 0.749979603086), (0.477955996282, 0.74513234612),
-    (0.523389793327, 0.748924302636), (0.571057789237, 0.74332894691),
-    (0.672409137852, 0.744177032192), (0.572539621444, 0.776609286626),
-    (0.5240106503, 0.783370783245), (0.477561227414, 0.778476346951)])
+TEMPLATE = [(30, (0.7,0.5)), (36, (0.5,0.3)), (45, (0.5,0.7)),
+        (39, (0.5,0.42)), (42, (0.5,0.58)), (48, (0.75, 0.38)),
+        (54, (0.75,0.62))]
+TEMPLATE = dict(TEMPLATE)
 
-TPL_MIN, TPL_MAX = np.min(TEMPLATE, axis=0), np.max(TEMPLATE, axis=0)
-MINMAX_TEMPLATE = (TEMPLATE - TPL_MIN) / (TPL_MAX - TPL_MIN)
+PATCHES = [(25,225,25,225), (25,151,25,225), (50,176,25,225), (75,201,25,225), (100,225,25,225),
+        (70,180,20,160), (70,180,90,230), (120,230,55,195), (125,235,25,165), (125,235,85,225)]
+PATCH_NAMES = ['g0', 'g1', 'g2', 'g3', 'g4', 'le', 're', 'nt', 'lm', 'rm']
+# 0 means 31x31, 1 means 39x31, 2 means 31x39
+TYPE = [1, 2, 2, 2, 2, 0, 0, 0, 0, 0]
 
 def mkdirP(path):
     """
@@ -196,11 +168,7 @@ class AlignDlib:
     .. image:: ../images/dlib-landmark-mean.png
     """
 
-    #: Landmark indices corresponding to the inner eyes and bottom lip.
-    INNER_EYES_AND_BOTTOM_LIP = [39, 42, 57]
-
-    #: Landmark indices corresponding to the outer eyes and nose.
-    OUTER_EYES_AND_NOSE = [36, 45, 33]
+    OUTER_EYES_AND_NOSE = [36, 45, 30]
 
     def __init__(self, facePredictor):
         """
@@ -266,7 +234,7 @@ class AlignDlib:
         points = self.predictor(rgbImg, bb)
         return list(map(lambda p: (p.x, p.y), points.parts()))
 
-    def align(self, imgDim, rgbImg, bb=None, pad=None, ts=None,
+    def align(self, imgDim, rgbImg, bb=None, 
               landmarks=None, landmarkIndices=INNER_EYES_AND_BOTTOM_LIP, opencv_det=False, opencv_model="./model/opencv/cascade.xml"):
         r"""align(imgDim, rgbImg, bb=None, landmarks=None, landmarkIndices=INNER_EYES_AND_BOTTOM_LIP)
 
@@ -320,14 +288,13 @@ class AlignDlib:
 
         npLandmarks = np.float32(landmarks)
         npLandmarkIndices = np.array(landmarkIndices)
+        dstLandmarks = []
+        for i in landmarkIndices:
+            dstLandmarks.append(TEMPLATE[i])
+        dstLandmarks = np.array(dstLandmarks) * 250
 
-        dstLandmarks = imgDim * MINMAX_TEMPLATE[npLandmarkIndices]
-        if ts is not None:
-            # reserve more area of forehead on a face
-            dstLandmarks[(0,1),1] = dstLandmarks[(0,1),1] + imgDim * float(ts)
-            dstLandmarks[2,1] = dstLandmarks[2,1] + imgDim * float(ts) / 2
-        H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices],dstLandmarks)
-        thumbnail = cv2.warpAffine(rgbImg, H, (imgDim, imgDim))
+        H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices], dstLandmarks)
+        thumbnail = cv2.warpAffine(rgbImg, H, (250, 250))
 
         return thumbnail
 
@@ -342,41 +309,6 @@ def write(vals, fName):
             f.write("\n")
 
 
-def computeMeanMain(args):
-    align = AlignDlib(args.dlibFacePredictor)
-
-    imgs = list(iterImgs(args.inputDir))
-    if args.numImages > 0:
-        imgs = random.sample(imgs, args.numImages)
-
-    facePoints = []
-    for img in imgs:
-        rgb = img.getRGB()
-        bb = align.getLargestFaceBoundingBox(rgb)
-        alignedPoints = align.align(rgb, bb)
-        if alignedPoints:
-            facePoints.append(alignedPoints)
-
-    facePointsNp = np.array(facePoints)
-    mean = np.mean(facePointsNp, axis=0)
-    std = np.std(facePointsNp, axis=0)
-
-    write(mean, "{}/mean.csv".format(args.modelDir))
-    write(std, "{}/std.csv".format(args.modelDir))
-
-    # Only import in this mode.
-    import matplotlib as mpl
-    mpl.use('Agg')
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots()
-    ax.scatter(mean[:, 0], -mean[:, 1], color='k')
-    ax.axis('equal')
-    for i, p in enumerate(mean):
-        ax.annotate(str(i), (p[0] + 0.005, -p[1] + 0.005), fontsize=8)
-    plt.savefig("{}/mean.png".format(args.modelDir))
-
-
 def alignMain(args):
     mkdirP(args.outputDir)
 
@@ -385,12 +317,7 @@ def alignMain(args):
     # Shuffle so multiple versions can be run at once.
     random.shuffle(imgs)
 
-    if args.landmarks == 'outerEyesAndNose':
-        landmarkIndices = AlignDlib.OUTER_EYES_AND_NOSE
-    elif args.landmarks == 'innerEyesAndBottomLip':
-        landmarkIndices = AlignDlib.INNER_EYES_AND_BOTTOM_LIP
-    else:
-        raise Exception("Landmarks unrecognized: {}".format(args.landmarks))
+    landmarkIndices = AlignDlib.OUTER_EYES_AND_NOSE
 
     align = AlignDlib(args.dlibFacePredictor)
 
@@ -412,19 +339,10 @@ def alignMain(args):
                     print("  + Unable to load.")
                 outRgb = None
             else:
-                outRgb = align.align(args.size, rgb, pad=args.pad, ts=args.ts,
+                outRgb = align.align(args.size, rgb,
                                      landmarkIndices=landmarkIndices, opencv_det=args.opencv_det, opencv_model=args.opencv_model)
                 if outRgb is None and args.verbose:
                     print("  + Unable to align.")
-
-            if args.fallbackLfw and outRgb is None:
-                nFallbacks += 1
-                deepFunneled = "{}/{}.jpg".format(os.path.join(args.fallbackLfw,
-                                                               imgObject.cls),
-                                                  imgObject.name)
-                shutil.copy(deepFunneled, "{}/{}.jpg".format(os.path.join(args.outputDir,
-                                                                          imgObject.cls),
-                                                             imgObject.name))
 
             if outRgb is not None:
                 if args.verbose:
@@ -436,7 +354,7 @@ def alignMain(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('inputDir', type=str, help="Input image directory.")
+    parser.add_argument('--inputDir', type=str, help="Input image directory.")
     parser.add_argument('--opencv-det', action='store_true', default=False,
                         help='True means using opencv model for face detection(because sometimes dlib'
                              'face detection will failed')
@@ -447,8 +365,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '--outputDir', type=str, help="Output directory of aligned images.")
-    alignmentParser.add_argument('--pad', type=float, nargs='+', help="pad (left,top,right,bottom) for face detection region")
-    alignmentParser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--verbose', action='store_true')
 
     args = parser.parse_args()
 
