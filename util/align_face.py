@@ -234,30 +234,25 @@ class AlignDlib:
         points = self.predictor(rgbImg, bb)
         return list(map(lambda p: (p.x, p.y), points.parts()))
 
-    def align(self, imgDim, rgbImg, bb=None, 
-              landmarks=None, landmarkIndices=INNER_EYES_AND_BOTTOM_LIP, opencv_det=False, opencv_model="./model/opencv/cascade.xml"):
-        r"""align(imgDim, rgbImg, bb=None, landmarks=None, landmarkIndices=INNER_EYES_AND_BOTTOM_LIP)
+    def align(self, rgbImg, bb=None, 
+              landmarks=None, landmarkIndices=OUTER_EYES_AND_NOSE, opencv_det=False, opencv_model="./model/opencv/cascade.xml"):
+        r"""align(rgbImg, bb=None, landmarks=None, landmarkIndices=INNER_EYES_AND_BOTTOM_LIP)
 
         Transform and align a face in an image.
 
-        :param imgDim: The edge length in pixels of the square the image is resized to.
-        :type imgDim: int
         :param rgbImg: RGB image to process. Shape: (height, width, 3)
         :type rgbImg: numpy.ndarray
         :param bb: Bounding box around the face to align. \
                    Defaults to the largest face.
         :type bb: dlib.rectangle
-        :param pad: padding bb by left, top, right, bottom
-        :type pad: list
         :param landmarks: Detected landmark locations. \
                           Landmarks found on `bb` if not provided.
         :type landmarks: list of (x,y) tuples
         :param landmarkIndices: The indices to transform to.
         :type landmarkIndices: list of ints
-        :return: The aligned RGB image. Shape: (imgDim, imgDim, 3)
+        :return: The aligned RGB image. Shape: (250, 250, 3)
         :rtype: numpy.ndarray
         """
-        assert imgDim is not None
         assert rgbImg is not None
         assert landmarkIndices is not None
 
@@ -276,12 +271,6 @@ class AlignDlib:
                 bb = self.getLargestFaceBoundingBox(rgbImg)
             if bb is None:
                 return
-            if pad is not None:
-                left = max(0, bb.left() - bb.width()*float(pad[0]))
-                top = max(0, bb.top() - bb.height()*float(pad[1]))
-                right = min(rgbImg.shape[1], bb.right() + bb.width()*float(pad[2]))
-                bottom = min(rgbImg.shape[0], bb.bottom()+bb.height()*float(pad[3]))
-                bb = dlib.rectangle(int(left), int(top), int(right), int(bottom))
 
         if landmarks is None:
             landmarks = self.findLandmarks(rgbImg, bb)
@@ -291,7 +280,9 @@ class AlignDlib:
         dstLandmarks = []
         for i in landmarkIndices:
             dstLandmarks.append(TEMPLATE[i])
-        dstLandmarks = np.array(dstLandmarks) * 250
+        dstLandmarks = ((np.array(dstLandmarks, dtype=np.float32)-0.5)*0.75+0.5) * 250
+        tmp = np.array([1,0])
+        dstLandmarks = dstLandmarks[:,tmp]
 
         H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices], dstLandmarks)
         thumbnail = cv2.warpAffine(rgbImg, H, (250, 250))
@@ -313,6 +304,7 @@ def alignMain(args):
     mkdirP(args.outputDir)
 
     imgs = list(iterImgs(args.inputDir))
+    print len(imgs)
 
     # Shuffle so multiple versions can be run at once.
     random.shuffle(imgs)
@@ -322,33 +314,44 @@ def alignMain(args):
     align = AlignDlib(args.dlibFacePredictor)
 
     nFallbacks = 0
-    for imgObject in imgs:
+    for imgObject in imgs[:10]:
         print("=== {} ===".format(imgObject.path))
-        outDir = os.path.join(args.outputDir, imgObject.cls)
-        mkdirP(outDir)
-        outputPrefix = os.path.join(outDir, imgObject.name)
-        imgName = outputPrefix + ".png"
-
-        if os.path.isfile(imgName):
+        rgb = imgObject.getRGB()
+        if rgb is None:
             if args.verbose:
-                print("  + Already found, skipping.")
+                print("  + Unable to load.")
+            outRgb = None
+            continue
         else:
-            rgb = imgObject.getRGB()
-            if rgb is None:
-                if args.verbose:
-                    print("  + Unable to load.")
-                outRgb = None
-            else:
-                outRgb = align.align(args.size, rgb,
-                                     landmarkIndices=landmarkIndices, opencv_det=args.opencv_det, opencv_model=args.opencv_model)
-                if outRgb is None and args.verbose:
-                    print("  + Unable to align.")
+            outRgb = align.align(rgb,
+                                 landmarkIndices=landmarkIndices, opencv_det=args.opencv_det, opencv_model=args.opencv_model)
+            if outRgb is None and args.verbose:
+                print("  + Unable to align.")
+                continue
 
-            if outRgb is not None:
+        outBgr = cv2.cvtColor(outRgb, cv2.COLOR_RGB2BGR)
+        cv2.imshow('1', outBgr)
+        cv2.waitKey(0)
+        for i in xrange(10):
+            patch_name = PATCH_NAMES[i]
+            crop = PATCHES[i]
+            target_shape = [(31, 31), (31, 39), (39, 31)][TYPE[i]]
+
+            outDir = os.path.join(args.outputDir, patch_name, imgObject.cls)
+            mkdirP(outDir)
+            outputPrefix = os.path.join(outDir, imgObject.name)
+            imgName = outputPrefix + ".png"
+
+            if os.path.isfile(imgName):
                 if args.verbose:
-                    print("  + Writing aligned file to disk.")
-                outBgr = cv2.cvtColor(outRgb, cv2.COLOR_RGB2BGR)
-                cv2.imwrite(imgName, outBgr)
+                    print("  + Already found, skipping.")
+            else:
+                if outRgb is not None:
+                    if args.verbose:
+                        print("  + Writing aligned file to disk.")
+                    out_crop = outBgr[crop[0]:crop[1],crop[2]:crop[3],:]
+                    out_crop = cv2.resize(out_crop, target_shape)
+                    cv2.imwrite(imgName, out_crop)
 
 
 if __name__ == '__main__':
